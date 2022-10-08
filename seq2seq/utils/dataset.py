@@ -1,9 +1,12 @@
+from distutils.util import split_quoted
 from typing import Optional, List, Dict, Callable
 from dataclasses import dataclass, field
 from datasets.dataset_dict import DatasetDict
 from datasets.arrow_dataset import Dataset
 from transformers.training_args import TrainingArguments
 from seq2seq.utils.bridge_content_encoder import get_database_matches
+from seq2seq.utils.lgerels2t5rels import preprocessing_dataset_split
+from seq2seq.preprocess.choose_dataset import preprocess_by_dataset
 import re
 import random
 
@@ -118,6 +121,21 @@ class DataTrainingArguments:
         default=True,
         metadata={"help": "Whether or not to add the database id to the target. Needed for Picard."},
     )
+    wandb_project_name : Optional[str] = field(
+        default="text-to-sql",
+        metadata={"help": "Base path to the lge relation dataset."})
+    use_rasat : bool = field(
+            default=False,
+            metadata={"help": "Whether to use rasat model and corresponding relation preprocessing."})
+    edge_type : Optional[str] = field(
+        default="Default",
+        metadata={"help": "The edge used in relation preprocessing."})
+    use_coref : bool = field(
+        default=False,
+        metadata={"help": "Whether to use coreference in relation preprocessing."})
+    use_dependency : bool = field(
+        default=False,
+        metadata={"help": "Whether to use dependency in relation preprocessing."})
 
     def __post_init__(self):
         if self.val_max_target_length is None:
@@ -132,6 +150,7 @@ class DataArguments:
     dataset_paths: Dict[str, str] = field(
         default_factory=lambda: {
             "spider": "./seq2seq/datasets/spider",
+            "sparc": "./seq2seq/datasets/sparc",
             "cosql": "./seq2seq/datasets/cosql",
         },
         metadata={"help": "Paths of the dataset modules."},
@@ -143,6 +162,7 @@ class DataArguments:
     metric_paths: Dict[str, str] = field(
         default_factory=lambda: {
             "spider": "./seq2seq/metrics/spider",
+            "sparc": "./seq2seq/metrics/sparc",
             "cosql": "./seq2seq/metrics/cosql",
         },
         metadata={"help": "Paths of the metric modules."},
@@ -158,6 +178,13 @@ class DataArguments:
         default=None,
         metadata={"help": "Sections from the data config to use for testing"}
     )
+    data_base_dir : Optional[str] = field(
+        default="./dataset_files/",
+        metadata={"help": "Base path to the lge relation dataset."})
+    split_dataset : Optional[str] = field(
+        default="",
+        metadata={"help": "The dataset name after spliting."})
+    
 
 
 @dataclass
@@ -197,6 +224,7 @@ def _get_schemas(examples: Dataset) -> Dict[str, dict]:
 
 def _prepare_train_split(
     dataset: Dataset,
+    data_args: DataArguments,
     data_training_args: DataTrainingArguments,
     add_serialized_schema: Callable[[dict], dict],
     pre_process_function: Callable[[dict, Optional[int], Optional[int]], dict],
@@ -208,6 +236,7 @@ def _prepare_train_split(
         num_proc=data_training_args.preprocessing_num_workers,
         load_from_cache_file=not data_training_args.overwrite_cache,
     )
+    
     if data_training_args.max_train_samples is not None:
         dataset = dataset.select(range(data_training_args.max_train_samples))
     column_names = dataset.column_names
@@ -219,14 +248,37 @@ def _prepare_train_split(
         ),
         batched=True,
         num_proc=data_training_args.preprocessing_num_workers,
-        remove_columns=column_names,
+        remove_columns=column_names[:-1] if column_names[-1]=="relations" else column_names,
         load_from_cache_file=not data_training_args.overwrite_cache,
     )
+
+    if data_args.split_dataset == "spider":
+        train_input_ids = [dataset[i]['input_ids'] for i in range(7000)]
+    else:
+        train_input_ids = [dataset[i]['input_ids'] for i in range(len(dataset))]
+    
+    if data_training_args.use_rasat:
+        relation_matrix_l = preprocess_by_dataset(
+            data_args.data_base_dir, 
+            data_args.split_dataset, 
+            train_input_ids, 
+            "train", 
+            edge_type=data_training_args.edge_type, 
+            use_coref=data_training_args.use_coref,
+            use_dependency=data_training_args.use_dependency
+            )
+
+        def add_relation_info_train(example, idx, relation_matrix_l=relation_matrix_l):
+            example['relations'] = relation_matrix_l[idx]  
+            return example
+        dataset = dataset.map(add_relation_info_train, with_indices=True)
+
     return TrainSplit(dataset=dataset, schemas=schemas)
 
 
 def _prepare_eval_split(
     dataset: Dataset,
+    data_args: DataArguments,
     data_training_args: DataTrainingArguments,
     add_serialized_schema: Callable[[dict], dict],
     pre_process_function: Callable[[dict, Optional[int], Optional[int]], dict],
@@ -243,6 +295,7 @@ def _prepare_eval_split(
         num_proc=data_training_args.preprocessing_num_workers,
         load_from_cache_file=not data_training_args.overwrite_cache,
     )
+
     column_names = eval_dataset.column_names
     eval_dataset = eval_dataset.map(
         lambda batch: pre_process_function(
@@ -252,9 +305,30 @@ def _prepare_eval_split(
         ),
         batched=True,
         num_proc=data_training_args.preprocessing_num_workers,
-        remove_columns=column_names,
+        remove_columns=column_names[:-1] if column_names[-1]=="relations" else column_names,
         load_from_cache_file=not data_training_args.overwrite_cache,
     )
+    
+
+    #TODO: It can not do the testing now (test will do dev still)
+    eval_input_ids = [eval_dataset[i]['input_ids'] for i in range(len(eval_dataset))]
+    
+    if data_training_args.use_rasat:
+        relation_matrix_l = preprocess_by_dataset(
+            data_args.data_base_dir, 
+            data_args.split_dataset, 
+            eval_input_ids, 
+            "dev", 
+            edge_type=data_training_args.edge_type, 
+            use_coref=data_training_args.use_coref,
+            use_dependency=data_training_args.use_dependency
+            )
+
+        def add_relation_info_train(example, idx, relation_matrix_l=relation_matrix_l):
+            example['relations'] = relation_matrix_l[idx]  
+            return example
+            
+        eval_dataset = eval_dataset.map(add_relation_info_train, with_indices=True)
     return EvalSplit(dataset=eval_dataset, examples=eval_examples, schemas=schemas)
 
 
@@ -271,6 +345,7 @@ def prepare_splits(
     if training_args.do_train:
         train_split = _prepare_train_split(
             dataset_dict["train"],
+            data_args = data_args,
             data_training_args=data_training_args,
             add_serialized_schema=add_serialized_schema,
             pre_process_function=pre_process_function,
@@ -279,6 +354,7 @@ def prepare_splits(
     if training_args.do_eval:
         eval_split = _prepare_eval_split(
             dataset_dict["validation"],
+            data_args = data_args,
             data_training_args=data_training_args,
             add_serialized_schema=add_serialized_schema,
             pre_process_function=pre_process_function,
@@ -288,6 +364,7 @@ def prepare_splits(
         test_splits = {
             section: _prepare_eval_split(
                 dataset_dict[section],
+                data_args = data_args,
                 data_training_args=data_training_args,
                 add_serialized_schema=add_serialized_schema,
                 pre_process_function=pre_process_function,
@@ -357,6 +434,15 @@ def serialize_schema(
         column_str_with_values = "{column} ( {values} )"
         column_str_without_values = "{column}"
         value_sep = " , "
+    elif schema_serialization_type == "custom":
+        # see https://github.com/google-research/language/blob/master/language/nqg/tasks/spider/append_schema.py#L42
+        db_id_str = " | {db_id}"
+        table_sep = ""
+        table_str = " | {table} : {columns}"
+        column_sep = " , "
+        column_str_with_values = "{column} [ {values} ]"
+        column_str_without_values = "{column}"
+        value_sep = " ; "
     else:
         raise NotImplementedError
 

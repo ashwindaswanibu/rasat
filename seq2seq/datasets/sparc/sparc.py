@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""CoSQL: A Conversational Text-to-SQL Challenge Towards Cross-Domain Natural Language Interfaces to Databases"""
+"""SParC: Cross-Domain Semantic Parsing in Context"""
 
 
 import json
@@ -25,65 +25,35 @@ logger = datasets.logging.get_logger(__name__)
 
 
 _CITATION = """\
-@inproceedings{yu-etal-2019-cosql,
-    title = "{C}o{SQL}: A Conversational Text-to-{SQL} Challenge Towards Cross-Domain Natural Language Interfaces to Databases",
-    author = "Yu, Tao  and
-      Zhang, Rui  and
-      Er, Heyang  and
-      Li, Suyi  and
-      Xue, Eric  and
-      Pang, Bo  and
-      Lin, Xi Victoria  and
-      Tan, Yi Chern  and
-      Shi, Tianze  and
-      Li, Zihan  and
-      Jiang, Youxuan  and
-      Yasunaga, Michihiro  and
-      Shim, Sungrok  and
-      Chen, Tao  and
-      Fabbri, Alexander  and
-      Li, Zifan  and
-      Chen, Luyao  and
-      Zhang, Yuwen  and
-      Dixit, Shreya  and
-      Zhang, Vincent  and
-      Xiong, Caiming  and
-      Socher, Richard  and
-      Lasecki, Walter  and
-      Radev, Dragomir",
-    booktitle = "Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)",
-    month = nov,
-    year = "2019",
-    address = "Hong Kong, China",
-    publisher = "Association for Computational Linguistics",
-    url = "https://www.aclweb.org/anthology/D19-1204",
-    doi = "10.18653/v1/D19-1204",
-    pages = "1962--1979",
-    abstract = "We present CoSQL, a corpus for building cross-domain, general-purpose database (DB) querying dialogue systems. It consists of 30k+ turns plus 10k+ annotated SQL queries, obtained from a Wizard-of-Oz (WOZ) collection of 3k dialogues querying 200 complex DBs spanning 138 domains. Each dialogue simulates a real-world DB query scenario with a crowd worker as a user exploring the DB and a SQL expert retrieving answers with SQL, clarifying ambiguous questions, or otherwise informing of unanswerable questions. When user questions are answerable by SQL, the expert describes the SQL and execution results to the user, hence maintaining a natural interaction flow. CoSQL introduces new challenges compared to existing task-oriented dialogue datasets: (1) the dialogue states are grounded in SQL, a domain-independent executable representation, instead of domain-specific slot value pairs, and (2) because testing is done on unseen databases, success requires generalizing to new domains. CoSQL includes three tasks: SQL-grounded dialogue state tracking, response generation from query results, and user dialogue act prediction. We evaluate a set of strong baselines for each task and show that CoSQL presents significant challenges for future research. The dataset, baselines, and leaderboard will be released at https://yale-lily.github.io/cosql.",
+@article{yu2019sparc,
+  title={Sparc: Cross-domain semantic parsing in context},
+  author={Yu, Tao and Zhang, Rui and Yasunaga, Michihiro and Tan, Yi Chern and Lin, Xi Victoria and Li, Suyi and Er, Heyang and Li, Irene and Pang, Bo and Chen, Tao and others},
+  journal={arXiv preprint arXiv:1906.02285},
+  year={2019}
 }
 """
 
 _DESCRIPTION = """\
-CoSQL is a large-scale dataset for training and testing task oriented dialog agents with SQL
+SParC is a dataset for cross-domain Semantic Parsing in Context.
 """
 
-_HOMEPAGE = "https://yale-lily.github.io/cosql"
+_HOMEPAGE = "https://yale-lily.github.io/sparc"
 
 _LICENSE = "CC BY-SA 4.0"
 
-# _URL = "https://drive.google.com/uc?export=download&id=14x6lsWqlu6gR-aYxa6cemslDN3qT3zxP"
-# _URL = "/home/jxqi/text2sql/data/cosql_dataset.zip"
-_URL = "../../../dataset_files/cosql_dataset.zip"
+# _URL = "https://drive.google.com/uc?export=download&id=13Abvu5SUMSP3SJM-ZIj66mOkeyAquR73"
+# _URL = "/home/jxqi/text2sql/data/sparc.zip"
+_URL = "../../../dataset_files/sparc.zip"
 
 
-class CoSQL(datasets.GeneratorBasedBuilder):
+class SParC(datasets.GeneratorBasedBuilder):
     VERSION = datasets.Version("1.0.0")
 
     BUILDER_CONFIGS = [
         datasets.BuilderConfig(
-            name="cosql",
+            name="SParC",
             version=VERSION,
-            description="A Conversational Text-to-SQL Challenge Towards Cross-Domain Natural Language Interfaces to Databases",
+            description="SParC is a dataset for cross-domain Semantic Parsing in Context.",
         ),
     ]
 
@@ -132,15 +102,15 @@ class CoSQL(datasets.GeneratorBasedBuilder):
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
                 gen_kwargs={
-                    "data_filepath": downloaded_filepath + "/cosql_dataset/sql_state_tracking/cosql_train.json",
-                    "db_path": downloaded_filepath + "/cosql_dataset/database",
+                    "data_filepath": downloaded_filepath + "/sparc/train.json",
+                    "db_path": downloaded_filepath + "/sparc/database",
                 },
             ),
             datasets.SplitGenerator(
                 name=datasets.Split.VALIDATION,
                 gen_kwargs={
-                    "data_filepath": downloaded_filepath + "/cosql_dataset/sql_state_tracking/cosql_dev.json",
-                    "db_path": downloaded_filepath + "/cosql_dataset/database",
+                    "data_filepath": downloaded_filepath + "/sparc/dev.json",
+                    "db_path": downloaded_filepath + "/sparc/database",
                 },
             ),
         ]
@@ -150,8 +120,8 @@ class CoSQL(datasets.GeneratorBasedBuilder):
         logger.info("generating examples from = %s", data_filepath)
         idx = 0 # indexing each training instance
         with open(data_filepath, encoding="utf-8") as f:
-            cosql = json.load(f)
-            for sample in cosql:
+            SParC = json.load(f)
+            for sample in SParC:
                 db_id = sample["database_id"]
                 if db_id not in self.schema_cache:
                     self.schema_cache[db_id] = dump_db_json_schema(

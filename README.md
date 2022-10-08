@@ -1,370 +1,174 @@
-<p align="center">
-    <br>
-    <img alt="make it parse" src="https://repository-images.githubusercontent.com/401779782/c2f46be5-b74b-4620-ad64-57487be3b1ab" width="600"/>
-    <br>
-<p>
-<p align="center">
-    <a href="https://github.com/ElementAI/picard/actions/workflows/build.yml">
-        <img alt="build" src="https://github.com/ElementAI/picard/actions/workflows/build.yml/badge.svg?branch=main&event=push">
-    </a>
-    <a href="https://github.com/ElementAI/picard/blob/main/LICENSE">
-        <img alt="license" src="https://img.shields.io/github/license/ElementAI/picard.svg?color=blue">
-    </a>
-</p>
+# The official implementation of the paper "RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL"(EMNLP 2022)
 
 This is the official implementation of the following paper:
 
-[Torsten Scholak](https://twitter.com/tscholak), Nathan Schucher, Dzmitry Bahdanau. [PICARD - Parsing Incrementally for Constrained Auto-Regressive Decoding from Language Models](https://arxiv.org/abs/2109.05093). *Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP).*
+Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin. RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL. Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP).
 
 If you use this code, please cite:
 
-```bibtex
-@inproceedings{Scholak2021:PICARD,
-  author = {Torsten Scholak and Nathan Schucher and Dzmitry Bahdanau},
-  title = "{PICARD}: Parsing Incrementally for Constrained Auto-Regressive Decoding from Language Models",
-  booktitle = "Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing",
-  month = nov,
-  year = "2021",
-  publisher = "Association for Computational Linguistics",
-  url = "https://aclanthology.org/2021.emnlp-main.779",
-  pages = "9895--9901",
+```
+@article{Qi2022RASATIR,
+  title={RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL},
+  author={Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin},
+  journal={ArXiv},
+  year={2022},
+  volume={abs/2205.06983}
 }
 ```
 
-## Watch The Video
 
-[![Watch the video](https://img.youtube.com/vi/kTpixsr-37w/maxresdefault.jpg)](https://youtu.be/kTpixsr-37w)
+# Quick start
 
-## Overview
-
-This code implements:
-
-* The PICARD algorithm for constrained decoding from language models.
-* A text-to-SQL semantic parser based on pre-trained sequence-to-sequence models and PICARD achieving state-of-the-art performance on both the [Spider](https://yale-lily.github.io/spider) and the [CoSQL](https://yale-lily.github.io/cosql) datasets. 
-
-## About PICARD
-
-> **TL;DR:** We introduce PICARD -- a new method for simple and effective constrained decoding from large pre-trained language models.
-> On the challenging Spider and CoSQL text-to-SQL datasets, PICARD significantly improves the performance of fine-tuned but otherwise unmodified T5 models.
-> Using PICARD, our T5-3B models achieved state-of-the-art performance on both Spider and CoSQL.
-
-In text-to-SQL translation, the goal is to translate a natural language question into a SQL query.
-There are two main challenges to this task:
-
-1. The generated SQL needs to be semantically correct, that is, correctly reflect the meaning of the question.
-2. The SQL also needs to be valid, that is, it must not result in an execution error.
-
-So far, there has been a trade-off between these two goals:
-The second problem can be solved by using a special decoder architecture that -- by construction -- always produces valid SQL.
-This is the approach taken by most prior work.
-Those decoders are called "constrained decoders", and they need to be trained from scratch on the text-to-SQL dataset.
-However, this limits the generality of the decoders, which is a problem for the first goal.
-
-A better approach would be to use a pre-trained encoder-decoder model and to constrain its decoder to produce valid SQL after fine-tuning the model on the text-to-SQL task.
-This is the approach taken by the PICARD algorithm.
-
-### How is PICARD different from existing constrained decoders?
-
-* It’s an incremental parsing algorithm that integrates with ordinary beam search.
-* It doesn’t require any training.
-* It doesn’t require modifying the model.
-* It works with any model that generates a sequence of tokens (including language models).
-* It doesn’t require a special vocabulary.
-* It works with character-, sub-word-, and word-level language models.
-
-### How does PICARD work?
-
-The following picture shows how PICARD is integrated with beam search.
-
-<p align="center">
-    <br>
-    <img src="beam_search_with_picard.svg" width="400"/>
-    <br>
-<p>
-
-Decoding starts from the left and proceeds to the right.
-The algorithm begins with a single token (usually `<s>`),
-and then keeps expanding the beam with hypotheses generated token-by-token by the decoder.
-At each decoding step and for each hypothesis,
-PICARD checks whether the next top-`k` tokens are valid.
-In the image above, only 3 token predictions are shown, and `k` is set to 2.
-Valid tokens (☑) are added to the beam. Invalid ones (☒) are discarded. The `k+1`-th, `k+2`-th, ... tokens are discarded, too.
-Like in normal beam search, the beam is pruned to contain only the top-`n` hypotheses.
-`n` is the beam size, and in the image above it is set to 2 as well.
-Hypotheses that are terminated with the end-of-sentence token (usually `</s>`) are not expanded further.
-The algorithm stops when the all hypotheses are terminated
-or when the maximum number of tokens has been reached.
-
-### How does PICARD know whether a token is valid?
-
-In PICARD, checking, accepting, and rejecting of tokens and token sequences is achieved through *parsing*.
-Parsing means that we attempt to assemble a data structure from the tokens
-that are currently in the beam or are about to be added to it.
-This data structure (and the parsing rules that are used to build it) encode the constraints we want to enforce.
-
-In the case of SQL, the data structure we parse to is the abstract syntax tree (AST) of the SQL query.
-The parsing rules are defined in a computer program called a parser.
-Database engines, such as PostgreSQL, MySQL, and SQLite, have their own built-in parser that they use internally to process SQL queries.
-For Spider and CoSQL,
-we have implemented a parser that supports a subset of the SQLite syntax and that checks additional constraints on the AST.
-In our implementation,
-the parsing rules are made up from simpler rules and primitives that are provided by a third-party parsing library.
-
-PICARD uses a parsing library called [attoparsec](https://hackage.haskell.org/package/attoparsec) that supports incremental input.
-This is a special capability that is not available in many other parsing libraries.
-You can feed attoparsec a string that represents only part of the expected input to parse.
-When parsing reaches the end of an input fragment,
-attoparsec will return a [continuation function](https://hackage.haskell.org/package/attoparsec-0.14.1/docs/Data-Attoparsec-Text.html#t:IResult)
-that can be used to continue parsing.
-Think of the continuation function as a suspended computation that can be resumed later.
-Input fragments can be parsed one after the other when they become available until the input is complete.
-
-Herein lies the key to PICARD:
-Incremental parsing of input fragments is exactly what we need to check tokens one by one during decoding.
-
-In PICARD,
-parsing is initialized with an empty string, and attoparsec will return the first continuation function.
-We then call that continuation function with all the token predictions we want to check in the first decoding step.
-For those tokens that are valid, the continuation function will return a new continuation function
-that we can use to continue parsing in the next decoding step.
-For those tokens that are invalid, the continuation function will return a failure value which cannot be used to continue parsing.
-Such failures are discarded and never end up in the beam.
-We repeat the process until the end of the input is reached.
-The input is complete once the model predicts the end-of-sentence token.
-When that happens, we finalize the parsing by calling the continuation function with an empty string.
-If the parsing is successful, it will return the final AST.
-If not, it will return a failure value.
-
-The parsing rules are described at a high level in the [PICARD paper](https://arxiv.org/abs/2109.05093).
-For details, see the PICARD code, specifically the [Language.SQL.SpiderSQL.Parse module](https://github.com/ElementAI/picard/blob/main/picard/src/Language/SQL/SpiderSQL/Parse.hs).
-
-### How well does PICARD work?
-
-Let's look at the numbers:
-
-#### On [Spider](https://yale-lily.github.io/spider)
-
-<table>
-  <tr>
-    <th rowspan=2 valign=bottom>URL</th>
-    <th rowspan=2 valign=bottom>Based on</th>
-    <th colspan=2>Exact-set Match Accuracy</th>
-    <th colspan=2>Execution Accuracy</th>
-  </tr>
-  <tr>
-    <th>Dev</th>
-    <th>Test</th>
-    <th>Dev</th>
-    <th>Test</th>
-  </tr>
-  <tr>
-    <td><b><a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a> w PICARD</b></td>
-    <td>T5-3B</td>
-    <td><b>75.5 %</b></td>
-    <td><b>71.9 %</b></td>
-    <td><b>79.3 %</b></td>
-    <td><b>75.1 %</b></td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a> w/o PICARD</td>
-    <td>T5-3B</td>
-    <td>71.5 %</td>
-    <td>68.0 %</td>
-    <td>74.4 %</td>
-    <td>70.1 %</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/3vnuv1vf">tscholak/3vnuv1vf</a> w PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.large</a></td>
-    <td>74.8 %</td>
-    <td>—</td>
-    <td>79.2 %</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/3vnuv1vf">tscholak/3vnuv1vf</a> w/o PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.large</a></td>
-    <td>71.2 %</td>
-    <td>—</td>
-    <td>74.4 %</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/1wnr382e">tscholak/1wnr382e</a> w PICARD</td>
-    <td>T5-Large</td>
-    <td>69.1 %</td>
-    <td>—</td>
-    <td>72.9 %</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/1wnr382e">tscholak/1wnr382e</a> w/o PICARD</td>
-    <td>T5-Large</td>
-    <td>65.3 %</td>
-    <td>—</td>
-    <td>67.2 %</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/1zha5ono">tscholak/1zha5ono</a> w PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.base</a></td>
-    <td>66.6 %</td>
-    <td>—</td>
-    <td>68.4 %</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/1zha5ono">tscholak/1zha5ono</a> w/o PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.base</a></td>
-    <td>59.4 %</td>
-    <td>—</td>
-    <td>60.0 %</td>
-    <td>—</td>
-  </tr>
-</table>
-
-Click on the links to download the models.
-<a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a> and <a href="https://huggingface.co/tscholak/1wnr382e">tscholak/1wnr382e</a>
-are the versions of the model that we used in our experiments for the paper, reported as T5-3B and T5-Large, respectively.
-<a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a>, <a href="https://huggingface.co/tscholak/3vnuv1vf">tscholak/3vnuv1vf</a>, and <a href="https://huggingface.co/tscholak/1zha5ono">tscholak/1zha5ono</a> were trained to use database content, whereas <a href="https://huggingface.co/tscholak/1wnr382e">tscholak/1wnr382e</a> was not.
-
-Note that, without PICARD, 12% of the SQL queries generated by <a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a> on Spider’s development set resulted in an execution error. With PICARD, this number decreased to 2%.
-
-#### On [CoSQL](https://yale-lily.github.io/cosql) Dialogue State Tracking
-
-<table>
-  <tr>
-    <th rowspan=2 valign=bottom>URL</th>
-    <th rowspan=2 valign=bottom>Based on</th>
-    <th colspan=2>Question Match Accuracy</th>
-    <th colspan=2>Interaction Match Accuracy</th>
-  </tr>
-  <tr>
-    <th>Dev</th>
-    <th>Test</th>
-    <th>Dev</th>
-    <th>Test</th>
-  </tr>
-  <tr>
-    <td><b><a href="https://huggingface.co/tscholak/2e826ioa">tscholak/2e826ioa</a> w PICARD</b></td>
-    <td>T5-3B</td>
-    <td><b>56.9 %</b></td>
-    <td><b>54.6 %</b></td>
-    <td><b>24.2 %</b></td>
-    <td><b>23.7 %</b></td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/2e826ioa">tscholak/2e826ioa</a> w/o PICARD</td>
-    <td>T5-3B</td>
-    <td>53.8 %</td>
-    <td>51.4 %</td>
-    <td>21.8 %</td>
-    <td>21.7 %</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/2jrayxos">tscholak/2jrayxos</a> w PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.large</a></td>
-    <td>54.2 %</td>
-    <td>—</td>
-    <td>—</td>
-    <td>—</td>
-  </tr>
-  <tr>
-    <td><a href="https://huggingface.co/tscholak/2jrayxos">tscholak/2jrayxos</a> w/o PICARD</td>
-    <td><a href="https://github.com/google-research/text-to-text-transfer-transformer/blob/main/released_checkpoints.md#lm-adapted-t511lm100k">t5.1.1.lm100k.large</a></td>
-    <td>52.5 %</td>
-    <td>—</td>
-    <td>—</td>
-    <td>—</td>
-  </tr>
-</table>
-
-Click on the links to download the models. <a href="https://huggingface.co/tscholak/2e826ioa">tscholak/2e826ioa</a> is the version of the model that we used in our experiments for the paper, reported as T5-3B.
-
-## Quick Start
-
-### Prerequisites
-
+## Code downloading
 This repository uses git submodules. Clone it like this:
-```sh
-$ git clone git@github.com:ElementAI/picard.git
-$ cd picard
+
+```
+$ git clone https://github.com/JiexingQi/RASAT.git
+$ cd RASAT
 $ git submodule update --init --recursive
 ```
+## Download the dataset
+Before running the code, you should download dataset files.
 
-### Training
-
-The training script is located in `seq2seq/run_seq2seq.py`.
-You can run it with:
+First, you should create a dictionary like this:
 ```
-$ make train
+mkdir -p dataset_files/ori_dataset
 ```
-The model will be trained on the Spider dataset by default.
-You can also train on CoSQL by running `make train-cosql`.
 
-The training script will create the directory `train` in the current directory.
-Training artifacts like checkpoints will be stored in this directory.
+And then you need to download the dataset file to dataset_files/ and just keep it in zip format. The download links are here:
++ Spider, [link](https://drive.google.com/uc?export=download&id=1_AckYkinAnhqmRQtGsQgUKAnTHxxX5J0)
++ SParC, [link](https://drive.google.com/uc?export=download&id=13Abvu5SUMSP3SJM-ZIj66mOkeyAquR73)
++ CoSQL, [link](https://drive.google.com/uc?export=download&id=14x6lsWqlu6gR-aYxa6cemslDN3qT3zxP)
 
-The default configuration is stored in `configs/train.json`.
-The settings are optimized for a GPU with 40GB of memory.
+Then unzip those dataset files into dataset_files/ori_dataset. Both files in zip format and unzip format is needed:
 
-These training settings should result in a model
-with at least 71% exact-set-match accuracy on the Spider development set.
-With PICARD, the accuracy should go up to at least 75%.
-
-We have uploaded a model trained on the Spider dataset to the huggingface model hub,
-<a href="https://huggingface.co/tscholak/cxmefzzi">tscholak/cxmefzzi</a>.
-A model trained on the CoSQL dialog state tracking dataset is available, too,
-<a href="https://huggingface.co/tscholak/2e826ioa">tscholak/2e826ioa</a>.
-
-### Evaluation
-
-The evaluation script is located in `seq2seq/run_seq2seq.py`.
-You can run it with:
 ```
-$ make eval
+unzip dataset_files/spider.zip -d dataset_files/ori_dataset/
+unzip dataset_files/cosql_dataset.zip -d dataset_files/ori_dataset/
+unzip dataset_files/sparc.zip -d dataset_files/ori_dataset/
 ```
-By default, the evaluation will be run on the Spider evaluation set.
-Evaluation on the CoSQL evaluation set can be run with `make eval-cosql`.
 
-The evaluation script will create the directory `eval` in the current directory.
-The evaluation results will be stored there.
+## The Coreference Resolution Files
+We recommend you just use the generated coreference resolution files. It just needs you run
 
-The default configuration is stored in `configs/eval.json`.
-
-### Serving
-
-A trained model can be served using the `seq2seq/serve_seq2seq.py` script.
-The configuration file can be found in `configs/serve.json`.
-You can start serving with:
 ```
-$ make serve
+unzip preprocessed_dataset.zip -d ./dataset_files/
 ```
-By default, the 800-million-parameter <a href="https://huggingface.co/tscholak/3vnuv1vf">tscholak/3vnuv1vf</a> model will be loaded. You can also load a different model by specifying the model name in the configuration file. The device to use can be specified as well. The default is to use the first available GPU. CPU can be used by specifying `-1`.
 
-When the script is called, it uses the folder specified by the `db_path` option to look for SQL database files.
-The default folder is `database`, which will be created in the current directory.
-Initially, this folder will be empty, and you can add your own SQL files to it.
-The structure of the folder should be like this:
+If you want to generate these coreference resolution files by yourself, you could create a new conda environment to install coreferee library since it may have a version conflict with other libraries. The install commands are as follows:
+
+```bash
+conda create -n coreferee python=3.9.7
+conda activate coreferee
+bash run_corefer_processing.sh
 ```
-database/
-  my_1st_database/
-    my_1st_database.sqlite
-  my_2nd_database/
-    my_2nd_database.sqlite
+
+and you can just assign the dataset name and the corresponding split, such as 
 ```
-where `my_1st_database` and `my_2nd_database` are the `db_id`s of the databases.
+python3 get_coref.py --input_path ./cosql_dataset/sql_state_tracking/cosql_dev.json --output_path ./dev_coref.json --dataset_name cosql --mode dev
+```
 
-Once the server is up and running, use the Swagger UI to test inference with the `/ask` endpoint.
-The server will be listening at `http://localhost:8000/`,
-and the Swagger UI will be available at `http://localhost:8000/docs#/default/ask_ask__db_id___question__get`.
+## Environment setup
 
-### Docker
+### Use docker
+The best performance is achieved by exploiting PICARD[1], and if you want to reproduce it, we recommend you use Docker.
 
-There are three docker images that can be used to run the code:
+You can simply use 
+```
+make eval
+```
+to start a new docker container for an interaction terminal that supports PICARD. 
 
-* **[tscholak/text-to-sql-dev](https://hub.docker.com/repository/docker/tscholak/text-to-sql-dev):** Base image with development dependencies. Use this for development. Pull it with `make pull-dev-image` from the docker hub. Rebuild the image with `make build-dev-image`. 
-* **[tsscholak/text-to-sql-train](https://hub.docker.com/repository/docker/tscholak/text-to-sql-train):** Training image with development dependencies but without Picard dependencies. Use this for fine-tuning a model. Pull it with `make pull-train-image` from the docker hub. Rebuild the image with `make build-train-image`.
-* **[tscholak/text-to-sql-eval](https://hub.docker.com/repository/docker/tscholak/text-to-sql-eval):** Training/evaluation image with all dependencies. Use this for evaluating a fine-tuned model with Picard. This image can also be used for training if you want to run evaluation during training with Picard. Pull it with `make pull-eval-image` from the docker hub. Rebuild the image with `make build-eval-image`.
+Since the docker environment doesn't have stanza, so you should run these commands before training or evaluting:
+```
+pip install stanza
+python3 seq2seq/stanza_downloader.py
+```
 
-All images are tagged with the current commit hash. The images are built with the buildx tool which is available in the latest docker-ce. Use `make init-buildkit` to initialize the buildx tool on your machine. You can then use `make build-dev-image`, `make build-train-image`, etc. to rebuild the images. Local changes to the code will not be reflected in the docker images unless they are committed to git.
+**Note:We only use PICARD for seperately evalutaion.**
+
+### Do not use Docker
+If Docker is not available to you, you could also run it in a python 3.9.7 environment 
+
+```bash
+conda create -n rasat python=3.9.7
+conda activate rasat
+pip3 install torch==1.8.2 torchvision==0.9.2 torchaudio==0.8.2 --extra-index-url https://download.pytorch.org/whl/lts/1.8/cu111
+pip install -r requirements.txt
+```
+
+However, you could not use PICARD in that way.
+
+
+
+
+## Training
+
+You can simply run these code like this:
+
+- Single-GPU
+```
+CUDA_VISIBLE_DEVICES="0" python3 seq2seq/run_seq2seq.py configs/train_0125_example.json
+```
+
+- Multi-GPU 
+```
+CUDA_VISIBLE_DEVICES="2,3" python3 -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 seq2seq/run_seq2seq.py configs/train_0125_example.json
+```
+
+and you should set --nproc_per_node=#gpus to make full use of all GPUs. A recommend total_batch_size = #gpus * gradient_accumulation_steps * per_device_train_batch_size is 2048.
+
+
+## Evalutaion
+
+You can simply run these codes:
+
+```
+CUDA_VISIBLE_DEVICES="2" python3 seq2seq/eval_run_seq2seq.py configs/cosql/eval_cosql_rasat_576.json
+```
+
+Notice：If you use Docker for evaluation, you may need to change the filemode for these dictionary before starting a new docker container:
+
+```
+chmod -R 777 seq2seq/
+chmod -R 777 dataset_files/
+```
+
+
+# Result and checkpoint
+
+The models shown below use database content, and the corresponding column like "edge_type", and "use_coref" are parameters set in config.json. All these model checkpoints are available in Huggingface. 
+
+## CoSQL
+| model                                              | edge_type | use_dependency | use_coref | QEM/IEM(Dev) | QEX/IEX(Dev) | QEM/IEM(Test) | QEX/IEX(Test) |
+|---------------------------------------------------:|-----------|----------------|-----------|--------------|--------------|---------------|---------------|
+| Jiexing/cosql_add_coref_t5_3b_order_0519_ckpt-576  | Default   | FALSE          | TRUE      | 56.1/25.9    | 63.2/34.1    | -             | -             |
+| + PICARD                                           | Default   | FALSE          | TRUE      | 58.6/27.0    | 67.0/39.6    | 53.6/24.1     | 64.9/34.3     |
+| Jiexing/cosql_add_coref_t5_3b_order_0519_ckpt-2624 | Default   | FALSE          | TRUE      | 56.4/25.6    | 63.1/34.8    | -             | -             |
+| + PICARD                                           | Default   | FALSE          | TRUE      | 57.9/26.3    | 66.1/38.6    | **55.7/26.5**     | **66.3/37.4**     |
+
+
+
+
+## SParC
+| model                                              | edge_type | use_dependency | use_coref | QEM/IEM(Dev) | QEX/IEX(Dev) | QEM/IEM(Test) | QEX/IEX(Test) |
+|---------------------------------------------------:|-----------|----------------|-----------|--------------|--------------|---------------|---------------|
+| Jiexing/sparc_add_coref_t5_3b_order_0514_ckpt-4224 | Default   | FALSE          | TRUE      | 65.0/45.5    | 72.4/53.1    | -             | -             |
+| + PICARD                                           | Default   | FALSE          | TRUE      | 67.5/46.9    | 73.2/53.8    | 67.7/44.9     | 74.0/52.6     |
+| Jiexing/sparc_add_coref_t5_3b_order_0514_ckpt-5696 | Default   | FALSE          | TRUE      | 63.7/47.4    | 68.1/50.2    | -             | -             |
+| + PICARD                                           | Default   | FALSE          | TRUE      | 67.1/49.3    | 72.5/53.6    | 67.3/45.2     | 73.6/52.6     |
+
+
+
+## Spider
+
+| model                              | edge_type | use_dependency | use_coref | EM(Dev) | EX(Dev) | EM(Test) | EX(Test) |
+|-----------------------------------:|-----------|----------------|-----------|---------|---------|----------|----------|
+| Jiexing/spider_relation_t5_3b-2624 | Default   | FALSE          | FALSE     | 72      | 76.6    | -        | -        |
+|                           + PICARD | Default   | FALSE          | FALSE     | 74.7    | **80.5**    | 70.6     | **75.5**     |
+| Jiexing/spider_relation_t5_3b-4160 | Default   | FALSE          | FALSE     | 72.6    | 76.6    | -        | -        |
+|                           + PICARD | Default   | FALSE          | FALSE     | **75.3**    | 78.3    | **70.9**     | 74.5     |
+
+
+# Acknowledgements
+We would like to thank Tao Yu, Hongjin Su, and Yusen Zhang for running evaluations on our submitted models. 

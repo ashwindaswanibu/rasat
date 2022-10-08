@@ -1,4 +1,5 @@
 import json
+import torch
 import numpy as np
 from typing import Optional
 from datasets.arrow_dataset import Dataset
@@ -12,6 +13,7 @@ def spider_get_input(
     serialized_schema: str,
     prefix: str,
 ) -> str:
+    
     return prefix + question.strip() + " " + serialized_schema.strip()
 
 
@@ -134,3 +136,41 @@ class SpiderTrainer(Seq2SeqTrainer):
         # references = [{**{"query": r}, **m} for r, m in zip(decoded_references, metas)]
         references = metas
         return self.metric.compute(predictions=predictions, references=references)
+
+
+    # # Change it to our custom loss
+    # def compute_loss(self, model, inputs, return_outputs=False):
+    #     """
+    #     How the loss is computed by Trainer. By default, all models return the loss in the first element.
+
+    #     Subclass and override for custom behavior.
+    #     """
+    #     if self.label_smoother is not None and "labels" in inputs:
+    #         labels = inputs.pop("labels")
+    #     else:
+    #         labels = None
+    #     outputs = model(**inputs)
+    #     # Save past state if it exists
+    #     # TODO: this needs to be fixed and made cleaner later.
+    #     if self.args.past_index >= 0:
+    #         self._past = outputs[self.args.past_index]
+
+    #     if labels is not None:
+    #         loss = self.label_smoother(outputs, labels)
+    #     else:
+    #         # We don't use .loss here since the model may return tuples instead of ModelOutput.
+    #         loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
+
+    #     def get_relation_norm(model):
+    #         '''
+    #             get relation params norm
+    #         '''
+    #         norm_loss = 0
+    #         for name, param in model.parameters():
+    #             if 'relation' in name:
+    #                 norm_loss += 0.5 * torch.sum(param**2)
+    #         return norm_loss
+
+    #     loss += get_relation_norm(model)
+
+    #     return (loss, outputs) if return_outputs else loss

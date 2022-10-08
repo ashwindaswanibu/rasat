@@ -148,3 +148,14 @@ eval/*
 transformers_cache/*
 wandb/*
 database/*
+dataset_files/*
+experiment/*
+transformers_cache/*
+
+# preprocess cache files
+*.bin
+**/database/*
+**/train.json
+**/dev.json
+**/tables.json
+!.gitkeep

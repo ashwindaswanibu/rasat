@@ -41,7 +41,9 @@ _HOMEPAGE = "https://yale-lily.github.io/spider"
 
 _LICENSE = "CC BY-SA 4.0"
 
-_URL = "https://drive.google.com/uc?export=download&id=1_AckYkinAnhqmRQtGsQgUKAnTHxxX5J0"
+# _URL = "https://drive.google.com/uc?export=download&id=1_AckYkinAnhqmRQtGsQgUKAnTHxxX5J0"
+# _URL = "/home/jxqi/text2sql/data/spider.zip"
+_URL = "../../../dataset_files/spider.zip"
 
 
 class Spider(datasets.GeneratorBasedBuilder):
@@ -133,9 +135,13 @@ class Spider(datasets.GeneratorBasedBuilder):
                             db_path + "/" + db_id + "/" + db_id + ".sqlite", db_id
                         )
                     schema = self.schema_cache[db_id]
+                    
+                    question = sample["question"]
+                    question = question.replace('``', "\"").replace("''", "\"")
+
                     yield idx, {
                         "query": sample["query"],
-                        "question": sample["question"],
+                        "question": question,
                         "db_id": db_id,
                         "db_path": db_path,
                         "db_table_names": schema["table_names_original"],

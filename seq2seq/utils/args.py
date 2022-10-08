@@ -37,3 +37,7 @@ class ModelArguments:
             "with private models)."
         },
     )
+    eval_checkpoint_path: str = field(
+        default=None,
+        metadata={"help": "Path to checkpoint to load."}
+    )

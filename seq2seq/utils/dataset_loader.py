@@ -17,21 +17,23 @@ from seq2seq.utils.dataset import (
     prepare_splits,
 )
 from seq2seq.utils.spider import spider_add_serialized_schema, spider_pre_process_function
+from seq2seq.utils.sparc import sparc_add_serialized_schema, sparc_pre_process_function
 from seq2seq.utils.cosql import cosql_add_serialized_schema, cosql_pre_process_function
 
 logger = logging.getLogger(__name__)
 
 
 def _log_duplicate_count(dataset: Dataset, dataset_name: str, split: str) -> None:
-    d = dataset.to_dict()
-    d_t = [tuple((k, tuple(v)) for k, v in zip(d.keys(), vs)) for vs in zip(*d.values())]
-    d_t_ = set(d_t)
-    num_examples = len(d_t)
-    duplicate_count = num_examples - len(d_t_)
-    if duplicate_count > 0:
-        logger.warning(
-            f"The split ``{split}`` of the dataset ``{dataset_name}`` contains {duplicate_count} duplicates out of {num_examples} examples"
-        )
+    # d = dataset.to_dict()
+    # d_t = [tuple((k, tuple(v)) for k, v in zip(d.keys(), vs)) for vs in zip(*d.values())]
+    # d_t_ = set(d_t)
+    # num_examples = len(d_t)
+    # duplicate_count = num_examples - len(d_t_)
+    # if duplicate_count > 0:
+    #     logger.warning(
+    #         f"The split ``{split}`` of the dataset ``{dataset_name}`` contains {duplicate_count} duplicates out of {num_examples} examples"
+    #     )
+    pass
 
 
 def load_dataset(
@@ -59,6 +61,25 @@ def load_dataset(
         tokenizer=tokenizer,
     )
 
+    _sparc_dataset_dict: Callable[[], DatasetDict] = lambda: datasets.load.load_dataset(
+        path=data_args.dataset_paths["sparc"], cache_dir=model_args.cache_dir
+    )
+    _sparc_metric: Callable[[], Metric] = lambda: datasets.load.load_metric(
+        path=data_args.metric_paths["sparc"], config_name=data_args.metric_config, test_suite_db_dir=data_args.test_suite_db_dir
+    )
+    _sparc_add_serialized_schema = lambda ex: sparc_add_serialized_schema(
+        ex=ex,
+        data_training_args=data_training_args,
+    )
+    _sparc_pre_process_function = lambda batch, max_source_length, max_target_length: sparc_pre_process_function(
+        batch=batch,
+        max_source_length=max_source_length,
+        max_target_length=max_target_length,
+        data_training_args=data_training_args,
+        tokenizer=tokenizer,
+    )
+
+
     _cosql_dataset_dict: Callable[[], DatasetDict] = lambda: datasets.load.load_dataset(
         path=data_args.dataset_paths["cosql"], cache_dir=model_args.cache_dir
     )
@@ -83,6 +104,8 @@ def load_dataset(
         "data_training_args": data_training_args,
     }
 
+    data_args.split_dataset = data_args.dataset # modified
+
     if data_args.dataset == "spider":
         metric = _spider_metric()
         dataset_splits = prepare_splits(
@@ -99,17 +122,28 @@ def load_dataset(
             pre_process_function=_cosql_pre_process_function,
             **_prepare_splits_kwargs,
         )
+    elif data_args.dataset == "sparc":
+        metric = _sparc_metric()
+        dataset_splits = prepare_splits(
+            dataset_dict=_sparc_dataset_dict(),
+            add_serialized_schema=_sparc_add_serialized_schema,
+            pre_process_function=_sparc_pre_process_function,
+            **_prepare_splits_kwargs,
+        )
     elif data_args.dataset == "cosql+spider":
         metric = _cosql_metric()
+        data_args.split_dataset = "cosql"
         cosql_dataset_splits = prepare_splits(
             dataset_dict=_cosql_dataset_dict(),
             add_serialized_schema=_cosql_add_serialized_schema,
             pre_process_function=_cosql_pre_process_function,
             **_prepare_splits_kwargs,
         )
+        data_args.split_dataset = "spider"
         spider_training_split = (
             _prepare_train_split(
                 dataset=_spider_dataset_dict()["train"],
+                data_args=data_args,
                 data_training_args=data_training_args,
                 add_serialized_schema=_spider_add_serialized_schema,
                 pre_process_function=_spider_pre_process_function,
@@ -139,6 +173,51 @@ def load_dataset(
             train_split=train_split,
             eval_split=cosql_dataset_splits.eval_split,
             test_splits=cosql_dataset_splits.test_splits,
+            schemas=schemas,
+        )
+    elif data_args.dataset == "sparc+spider":
+        data_args.split_dataset = "sparc"
+        metric = _sparc_metric()
+        sparc_dataset_splits = prepare_splits(
+            dataset_dict=_sparc_dataset_dict(),
+            add_serialized_schema=_sparc_add_serialized_schema,
+            pre_process_function=_sparc_pre_process_function,
+            **_prepare_splits_kwargs,
+        )
+        data_args.split_dataset = "spider"
+        spider_training_split = (
+            _prepare_train_split(
+                dataset=_spider_dataset_dict()["train"],
+                data_args=data_args,
+                data_training_args=data_training_args,
+                add_serialized_schema=_spider_add_serialized_schema,
+                pre_process_function=_spider_pre_process_function,
+            )
+            if training_args.do_train
+            else None
+        )
+        if sparc_dataset_splits.train_split is None and spider_training_split is None:
+            train_split = None
+        elif sparc_dataset_splits.train_split is None:
+            train_split = spider_training_split
+        elif spider_training_split is None:
+            train_split = sparc_dataset_splits.train_split
+        else:
+            dataset: Dataset = concatenate_datasets(
+                dsets=[sparc_dataset_splits.train_split.dataset, spider_training_split.dataset]
+            )
+            train_split = TrainSplit(
+                dataset=dataset,
+                schemas={**spider_training_split.schemas, **sparc_dataset_splits.train_split.schemas},
+            )
+        schemas = {
+            **sparc_dataset_splits.schemas,
+            **(spider_training_split.schemas if spider_training_split is not None else {}),
+        }
+        dataset_splits = DatasetSplits(
+            train_split=train_split,
+            eval_split=sparc_dataset_splits.eval_split,
+            test_splits=sparc_dataset_splits.test_splits,
             schemas=schemas,
         )
     else:

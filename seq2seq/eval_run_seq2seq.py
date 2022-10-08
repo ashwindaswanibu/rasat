@@ -4,9 +4,8 @@ import logging
 
 # ==============================Change Path=======================================
 import os
-
 abs_path = os.path.abspath(sys.argv[0])
-dir_path = abs_path.replace("/seq2seq/run_seq2seq.py", "")
+dir_path = abs_path.replace("/seq2seq/eval_run_seq2seq.py", "")
 sys.path.append(dir_path)
 # ================================================================================
 
@@ -25,25 +24,26 @@ from contextlib import nullcontext
 from dataclasses import asdict, fields
 from transformers.hf_argparser import HfArgumentParser
 from transformers.training_args_seq2seq import Seq2SeqTrainingArguments
-from transformers.models.auto import AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers.models.auto import AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM, AutoModel
 # from transformers.data.data_collator import DataCollatorForSeq2Seq
 from seq2seq.utils.relation_data_collator import DataCollatorForSeq2Seq
 from transformers.trainer_utils import get_last_checkpoint, set_seed
-from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
+# from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
+from seq2seq.model.t5_relation_model import T5ForConditionalGeneration
 from transformers.models.t5.tokenization_t5_fast import T5TokenizerFast
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from tokenizers import AddedToken
 from seq2seq.utils.args import ModelArguments
-from seq2seq.utils.picard_model_wrapper import PicardArguments, PicardLauncher, with_picard
+# from seq2seq.utils.picard_model_wrapper import PicardArguments, PicardLauncher, with_picard
+from seq2seq.utils.custom_picard_model_wrapper import PicardArguments, PicardLauncher, with_picard
 from seq2seq.utils.dataset import DataTrainingArguments, DataArguments
 from seq2seq.utils.dataset_loader import load_dataset
 from seq2seq.utils.spider import SpiderTrainer
-from seq2seq.utils.cosql import CoSQLTrainer
 from seq2seq.utils.sparc import SParCTrainer
-from seq2seq.preprocess.get_relation2id_dict import get_relation2id_dict
+from seq2seq.utils.cosql import CoSQLTrainer
 
-from model.model_utils import get_relation_t5_model, get_original_t5_model
-from transformers import T5Config
+from seq2seq.preprocess.get_relation2id_dict import get_relation2id_dict
+from seq2seq.model.t5_relation_config import RASATConfig
 
 
 
@@ -93,7 +93,7 @@ def main() -> None:
         if "MLFLOW_EXPERIMENT_ID" in os.environ:
             init_args["group"] = os.environ["MLFLOW_EXPERIMENT_ID"]
         wandb.init(
-            project=os.getenv("WANDB_PROJECT", data_training_args.wandb_project_name),
+            project=os.getenv("WANDB_PROJECT", "text-to-sql"),
             name=training_args.run_name,
             **init_args,
         )
@@ -128,7 +128,20 @@ def main() -> None:
     set_seed(training_args.seed)
 
     # Initialize config
-    config = AutoConfig.from_pretrained(
+    # config = AutoConfig.from_pretrained(
+    #     model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+    #     cache_dir=model_args.cache_dir,
+    #     revision=model_args.model_revision,
+    #     use_auth_token=True if model_args.use_auth_token else None,
+    #     max_length=data_training_args.max_target_length,
+    #     num_beams=data_training_args.num_beams,
+    #     num_beam_groups=data_training_args.num_beam_groups,
+    #     diversity_penalty=data_training_args.diversity_penalty,
+    #     gradient_checkpointing=training_args.gradient_checkpointing,
+    #     use_cache=not training_args.gradient_checkpointing,
+    # )
+
+    config = RASATConfig.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
@@ -151,6 +164,7 @@ def main() -> None:
     )
     assert isinstance(tokenizer, PreTrainedTokenizerFast), "Only fast tokenizers are currently supported"
     if isinstance(tokenizer, T5TokenizerFast):
+        print("This is a T5TokenizerFast.")
         # In T5 `<` is OOV, see https://github.com/google-research/language/blob/master/language/nqg/tasks/spider/restore_oov.py
         tokenizer.add_tokens([AddedToken(" <="), AddedToken(" <")])
 
@@ -181,10 +195,14 @@ def main() -> None:
             print("Num of relations uesd in RASAT is : ", num_relations)
             print("===================================================")
             print("Use relation model.")
-            model = get_relation_t5_model(config=config, model_name_or_path=model_args.model_name_or_path)
-        else:
-            print("Use original model.")
-            model = get_original_t5_model(config=config, model_name_or_path=model_args.model_name_or_path)
+        model = model_cls_wrapper(T5ForConditionalGeneration).from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
 
         if isinstance(model, T5ForConditionalGeneration):
             print("True")
@@ -216,10 +234,10 @@ def main() -> None:
         }
         if data_args.dataset in ["spider"]:
             trainer = SpiderTrainer(**trainer_kwargs)
-        elif data_args.dataset in ["cosql", "cosql+spider"]:
-            trainer = CoSQLTrainer(**trainer_kwargs)
         elif data_args.dataset in ["sparc", "sparc+spider"]:
             trainer = SParCTrainer(**trainer_kwargs)
+        elif data_args.dataset in ["cosql", "cosql+spider"]:
+            trainer = CoSQLTrainer(**trainer_kwargs)
         else:
             raise NotImplementedError()
 

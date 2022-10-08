@@ -39,12 +39,18 @@ def compute_test_suite_metric(predictions, references, db_dir: Optional[str] = N
         keep_distinct=False,
         progress_bar_for_each_datapoint=False,
     )
-    # Only used for Sparc/CoSQL
+    # Used on SParC and CoSQL
     turn_scores = {"exec": [], "exact": []}
     for prediction, reference in zip(predictions, references):
+        
         turn_idx = reference.get("turn_idx", 0)
         # skip final utterance-query pairs
         if turn_idx < 0:
+            if turn_scores["exec"] != []:
+                if all(v == 1 for v in turn_scores["exec"]):
+                    evaluator.scores["joint_all"]["exec"] += 1
+                evaluator.scores["joint_all"]["count"] += 1
+                turn_scores = {"exec": [], "exact": []}
             continue
         try:
             _ = evaluator.evaluate_one(
@@ -57,6 +63,8 @@ def compute_test_suite_metric(predictions, references, db_dir: Optional[str] = N
         except AssertionError as e:
             logger.warning(f"unexpected evaluation error: {e.args[0]}")
     evaluator.finalize()
+
     return {
         "exec": evaluator.scores["all"]["exec"],
+        "interact_exec": evaluator.scores["joint_all"]["exec"],
     }

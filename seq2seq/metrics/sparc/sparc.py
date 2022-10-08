@@ -1,8 +1,8 @@
 """Spider metrics."""
 
 from typing import Optional, Union
-from seq2seq.metrics.cosql.cosql_interact_test_suite import compute_test_suite_metric
-from seq2seq.metrics.cosql.cosql_interact_match import compute_exact_match_metric
+from seq2seq.metrics.sparc.sparc_interact_test_suite import compute_test_suite_metric
+from seq2seq.metrics.sparc.sparc_interact_match import compute_exact_match_metric
 import datasets
 
 
@@ -34,7 +34,7 @@ _URL = "https://drive.google.com/uc?export=download&id=1_AckYkinAnhqmRQtGsQgUKAn
 
 
 @datasets.utils.file_utils.add_start_docstrings(_DESCRIPTION, _KWARGS_DESCRIPTION)
-class CoSQL(datasets.Metric):
+class SParC(datasets.Metric):
     def __init__(
         self,
         config_name: Optional[str] = None,

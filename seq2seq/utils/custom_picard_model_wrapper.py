@@ -7,6 +7,7 @@ import sys
 import subprocess
 import warnings
 import time
+from numpy import mod
 from tenacity import retry, wait_random_exponential, stop_after_delay, before_sleep_log
 import torch
 from torch._C import Value
@@ -17,8 +18,11 @@ from transformers.file_utils import ModelOutput, copy_func
 from transformers.models.auto.auto_factory import _get_model_class
 from transformers.models.auto.configuration_auto import AutoConfig
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
-from transformers.models.auto import AutoModelForSeq2SeqLM
+from transformers.models.auto import AutoModelForSeq2SeqLM, MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING
+from transformers import T5ForConditionalGeneration as T5_Pretrained
 import logging
+
+from seq2seq.model.t5_relation_config import RASATConfig
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +418,9 @@ def with_picard(
             )
 
     class _PicardAutoModelClass(model_cls):
+
+        _model_mapping = MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING
+
         @classmethod
         def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
             config = kwargs.pop("config", None)
@@ -423,17 +430,54 @@ def with_picard(
                     pretrained_model_name_or_path, return_unused_kwargs=True, **kwargs
                 )
 
-            if type(config) in cls._model_mapping.keys():
-                model_class = _get_model_class(config, cls._model_mapping)
+            # print(type(config))
+            # print(type(RASATConfig))
+            if isinstance(config, RASATConfig):
+                # model_class = _get_model_class(config, cls._model_mapping)
+                model_class = model_cls
                 generate = copy_func(_generate)
                 generate.__doc__ = model_class.generate.__doc__
                 model_class.generate = generate
                 model_class.add_schema = staticmethod(copy_func(_add_schema))
                 return model_class.from_pretrained(pretrained_model_name_or_path, *model_args, config=config, **kwargs)
             raise ValueError(
+                f"Only support RASAT model"
+            )
+
+        @classmethod
+        def from_checkpoint(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+            config = kwargs.pop("config", None)
+            kwargs["_from_auto"] = True
+            if not isinstance(config, PretrainedConfig):
+                config, kwargs = AutoConfig.from_pretrained(
+                    pretrained_model_name_or_path, return_unused_kwargs=True, **kwargs
+                )
+
+            print("model_cls:", model_cls)
+            print("type(config):", type(config))
+            if type(config) in cls._model_mapping.keys():
+                # model_class = _get_model_class(config, cls._model_mapping)
+                model_class = model_cls
+                generate = copy_func(_generate)
+                generate.__doc__ = model_class.generate.__doc__
+                model_class.generate = generate
+                model_class.add_schema = staticmethod(copy_func(_add_schema))
+                print("model_class:", model_class)
+                model = model_class(config=config)
+
+                # print("model: ", model)
+                checkpoint_dict = torch.load(pretrained_model_name_or_path+"/pytorch_model.bin")
+                # print("checkpoint_dict.keys(): ", checkpoint_dict.keys())
+                model_dict = model.state_dict()
+                model_dict.update(checkpoint_dict)
+                model.load_state_dict(model_dict)
+
+                return model
+            raise ValueError(
                 f"Unrecognized configuration class {config.__class__} for this kind of AutoModel: {cls.__name__}.\n"
                 f"Model type should be one of {', '.join(c.__name__ for c in cls._model_mapping.keys())}."
             )
+
 
     asyncio.run(_init_picard(), debug=False)
 
