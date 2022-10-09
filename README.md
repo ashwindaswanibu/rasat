@@ -171,4 +171,4 @@ The models shown below use database content, and the corresponding column like "
 
 
 # Acknowledgements
-We would like to thank Tao Yu, Hongjin Su, and Yusen Zhang for running evaluations on our submitted models. 
+We would like to thank Tao Yu, Hongjin Su, and Yusen Zhang for running evaluations on our submitted models. We would also like to thank Lyuwen Wu for her comments on the Readme file of our code repository.
