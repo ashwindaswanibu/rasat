@@ -108,12 +108,12 @@ You can simply run these code like this:
 
 - Single-GPU
 ```
-CUDA_VISIBLE_DEVICES="0" python3 seq2seq/run_seq2seq.py configs/train_0125_example.json
+CUDA_VISIBLE_DEVICES="0" python3 seq2seq/run_seq2seq.py configs/sparc/train_sparc_rasat_small.json
 ```
 
 - Multi-GPU 
 ```
-CUDA_VISIBLE_DEVICES="2,3" python3 -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 seq2seq/run_seq2seq.py configs/train_0125_example.json
+CUDA_VISIBLE_DEVICES="2,3" python3 -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 seq2seq/run_seq2seq.py configs/sparc/train_sparc_rasat_small.json
 ```
 
 and you should set --nproc_per_node=#gpus to make full use of all GPUs. A recommend total_batch_size = #gpus * gradient_accumulation_steps * per_device_train_batch_size is 2048.
