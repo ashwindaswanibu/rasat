@@ -9,7 +9,7 @@ If you use this code, please cite:
 ```
 @article{Qi2022RASATIR,
   title={RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL},
-  author={Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin},
+  author={Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Yu Cheng and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin},
   journal={ArXiv},
   year={2022},
   volume={abs/2205.06983}
