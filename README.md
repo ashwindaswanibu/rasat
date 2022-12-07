@@ -2,7 +2,7 @@
 
 This is the official implementation of the following paper:
 
-Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin. RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL. Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP).
+Jiexing Qi and Jingyao Tang and Ziwei He and Xiangpeng Wan and Yu Cheng and Chenghu Zhou and Xinbing Wang and Quanshi Zhang and Zhouhan Lin. RASAT: Integrating Relational Structures into Pretrained Seq2Seq Model for Text-to-SQL. Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP).
 
 If you use this code, please cite:
 
@@ -153,7 +153,7 @@ The models shown below use database content, and the corresponding column like "
 ## SParC
 | model                                              | edge_type | use_dependency | use_coref | QEM/IEM(Dev) | QEX/IEX(Dev) | QEM/IEM(Test) | QEX/IEX(Test) |
 |---------------------------------------------------:|-----------|----------------|-----------|--------------|--------------|---------------|---------------|
-| Jiexing/sparc_add_coref_t5_3b_order_0514_ckpt-4224 | Default   | FALSE          | TRUE      | 65.0/45.5    | 72.4/53.1    | -             | -             |
+| Jiexing/sparc_add_coref_t5_3b_order_0514_ckpt-4224 | Default   | FALSE          | TRUE      | 65.0/45.5    | 69.9/50.7    | -             | -             |
 | + PICARD                                           | Default   | FALSE          | TRUE      | 67.5/46.9    | 73.2/53.8    | 67.7/44.9     | 74.0/52.6     |
 | Jiexing/sparc_add_coref_t5_3b_order_0514_ckpt-5696 | Default   | FALSE          | TRUE      | 63.7/47.4    | 68.1/50.2    | -             | -             |
 | + PICARD                                           | Default   | FALSE          | TRUE      | 67.1/49.3    | 72.5/53.6    | 67.3/45.2     | 73.6/52.6     |
