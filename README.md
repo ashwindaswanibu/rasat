@@ -99,6 +99,8 @@ pip install -r requirements.txt
 
 However, you could not use PICARD in that way.
 
+**Please Note: the version of stanza must keep 1.3.0, other versions will lead to error. **
+
 
 
 
