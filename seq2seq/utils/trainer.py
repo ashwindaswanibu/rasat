@@ -13,7 +13,7 @@ import time
 import torch
 import torch.nn as nn
 
-from transformers.deepspeed import is_deepspeed_zero3_enabled
+# from transformers.deepspeed import is_deepspeed_zero3_enabled
 from packaging import version
 
 # from seq2seq.utils.custom_lr_scheduler import get_scheduler_custom
@@ -231,7 +231,7 @@ class Seq2SeqTrainer(transformers.trainer_seq2seq.Seq2SeqTrainer):
         gen_kwargs = {
             "max_length": self._max_length if self._max_length is not None else self.model.config.max_length,
             "num_beams": self._num_beams if self._num_beams is not None else self.model.config.num_beams,
-            "synced_gpus": True if is_deepspeed_zero3_enabled() else False,
+            "synced_gpus": False,
         }
 
         if "relations" in inputs.keys():

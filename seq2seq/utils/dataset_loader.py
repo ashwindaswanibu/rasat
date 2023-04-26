@@ -122,6 +122,7 @@ def load_dataset(
             pre_process_function=_cosql_pre_process_function,
             **_prepare_splits_kwargs,
         )
+        
     elif data_args.dataset == "sparc":
         metric = _sparc_metric()
         dataset_splits = prepare_splits(
@@ -220,6 +221,7 @@ def load_dataset(
             test_splits=sparc_dataset_splits.test_splits,
             schemas=schemas,
         )
+        print()
     else:
         raise NotImplementedError()
 
