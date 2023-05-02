@@ -263,9 +263,9 @@ def _prepare_train_split(
             data_args.split_dataset, 
             train_input_ids, 
             "train", 
-            edge_type=data_training_args.edge_type, 
-            use_coref=data_training_args.use_coref,
-            use_dependency=data_training_args.use_dependency
+            edge_type="Default" 
+            use_coref= False,
+            use_dependency=True
             )
 
         def add_relation_info_train(example, idx, relation_matrix_l=relation_matrix_l):
@@ -338,9 +338,9 @@ def prepare_splits(
     training_args: TrainingArguments,
     data_training_args: DataTrainingArguments,
     add_serialized_schema: Callable[[dict], dict],
-    pre_process_function: Callable[[dict, Optional[int], Optional[int]], dict],
+    pre_process_function: Callable[[dict, Optional[int], Optional[int]], dict]
 ) -> DatasetSplits:
-    train_split, eval_split, test_splits = None, None, None
+    train_split, eval_split, test_splits, retrieval_augmentation_split = None, None, None, None
 
     if training_args.do_train:
         train_split = _prepare_train_split(
@@ -375,18 +375,30 @@ def prepare_splits(
         for split in test_splits.values():
             test_split_schemas.update(split.schemas)
 
+    # Prepare the retrieval_augmentation_split
+    retrieval_augmentation_split = _prepare_eval_split(
+        dataset_dict["retrieval_augmentation"],
+        data_args = data_args,
+        data_training_args=data_training_args,
+        add_serialized_schema=add_serialized_schema,
+        pre_process_function=pre_process_function,
+    )
+
     schemas = {
         **(train_split.schemas if train_split is not None else {}),
         **(eval_split.schemas if eval_split is not None else {}),
         **(test_split_schemas if test_splits is not None else {}),
+        **(retrieval_augmentation_split.schemas if retrieval_augmentation_split is not None else {}),
     }
 
     return DatasetSplits(
         train_split=train_split, 
         eval_split=eval_split, 
         test_splits=test_splits, 
+        retrieval_augmentation_split=retrieval_augmentation_split, 
         schemas=schemas
     )
+
 
 
 def normalize(query: str) -> str:
